@@ -10,7 +10,7 @@ workflows:
       - name: Install dependencies
         script: npm ci || npm install
       - name: Expo prebuild
-        script: npx expo prebuild --platform android --clean
+        script: npx expo prebuild --platform android --clean --no-install
       - name: Gradle assemble
         script: |
           cd android
@@ -32,8 +32,15 @@ workflows:
           # Give Gradle enough heap to compile RN + Kotlin on the free tier and
           # always emit --stacktrace/--info so the failure block is diagnosable.
           export GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
-          echo "Running ./gradlew $GRADLE_TASK (BUILD_VARIANT=$VARIANT_RAW)"
-          ./gradlew "$GRADLE_TASK" --stacktrace --info --no-daemon
+          # Honor ANDROID_ARCH: 'all' -> universal (no filter); anything else
+          # -> pass the value straight through as -PreactNativeArchitectures.
+          ARCH_RAW="${ANDROID_ARCH:-arm64-v8a}"
+          ARCH_ARGS=""
+          if [ "$ARCH_RAW" != "all" ]; then
+            ARCH_ARGS="-PreactNativeArchitectures=$ARCH_RAW"
+          fi
+          echo "Running ./gradlew $GRADLE_TASK (BUILD_VARIANT=$VARIANT_RAW, ANDROID_ARCH=$ARCH_RAW)"
+          ./gradlew "$GRADLE_TASK" $ARCH_ARGS --stacktrace --info --no-daemon
     artifacts:
       - android/app/build/outputs/**/*.apk
 
@@ -47,12 +54,18 @@ workflows:
       - name: Install dependencies
         script: npm ci || npm install
       - name: Expo prebuild
-        script: npx expo prebuild --platform android --clean
+        script: npx expo prebuild --platform android --clean --no-install
       - name: Gradle bundle
         script: |
           cd android
           export GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
-          ./gradlew bundleRelease --stacktrace --info --no-daemon
+          ARCH_RAW="${ANDROID_ARCH:-all}"
+          ARCH_ARGS=""
+          if [ "$ARCH_RAW" != "all" ]; then
+            ARCH_ARGS="-PreactNativeArchitectures=$ARCH_RAW"
+          fi
+          echo "Running ./gradlew bundleRelease (ANDROID_ARCH=$ARCH_RAW)"
+          ./gradlew bundleRelease $ARCH_ARGS --stacktrace --info --no-daemon
     artifacts:
       - android/app/build/outputs/**/*.aab
 
