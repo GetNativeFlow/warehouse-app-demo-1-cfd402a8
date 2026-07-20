@@ -23,8 +23,17 @@ workflows:
             debug|Debug|DEBUG) GRADLE_TASK="assembleDebug" ;;
             *) GRADLE_TASK="assembleRelease" ;;
           esac
+          # For debug builds, strip any release-signing env so a missing keystore
+          # cannot mask the real failure with a "keystore not found" error.
+          if [ "$GRADLE_TASK" = "assembleDebug" ]; then
+            unset NATIVEFLOW_UPLOAD_STORE_FILE NATIVEFLOW_UPLOAD_STORE_PASSWORD \
+                  NATIVEFLOW_UPLOAD_KEY_ALIAS NATIVEFLOW_UPLOAD_KEY_PASSWORD
+          fi
+          # Give Gradle enough heap to compile RN + Kotlin on the free tier and
+          # always emit --stacktrace/--info so the failure block is diagnosable.
+          export GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
           echo "Running ./gradlew $GRADLE_TASK (BUILD_VARIANT=$VARIANT_RAW)"
-          ./gradlew "$GRADLE_TASK"
+          ./gradlew "$GRADLE_TASK" --stacktrace --info --no-daemon
     artifacts:
       - android/app/build/outputs/**/*.apk
 
@@ -42,7 +51,8 @@ workflows:
       - name: Gradle bundle
         script: |
           cd android
-          ./gradlew bundleRelease
+          export GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
+          ./gradlew bundleRelease --stacktrace --info --no-daemon
     artifacts:
       - android/app/build/outputs/**/*.aab
 
